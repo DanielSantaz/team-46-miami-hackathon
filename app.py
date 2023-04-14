@@ -83,7 +83,7 @@ with tab1:
                     image.save(img_byte_arr, format='PNG',
                                subsampling=0, quality=100)
                     img_byte_arr = img_byte_arr.getvalue()
-                    reader = easyocr.Reader(['en'])
+                    reader = easyocr.Reader(['en'],download_enabled=False)
                     result = reader.readtext(img_byte_arr)
 
                     # prepare extracted text
