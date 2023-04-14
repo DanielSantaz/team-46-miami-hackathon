@@ -5,9 +5,16 @@ import io
 from transformers import pipeline, T5Config, T5ForConditionalGeneration, T5Tokenizer
 
 # question generator setup
-question_model = "allenai/t5-small-squad2-question-generation"
-tokenizer = T5Tokenizer.from_pretrained(question_model)
-model = T5ForConditionalGeneration.from_pretrained(question_model)
+question_model = None
+model = None
+tokenizer = None
+@st.cache
+def load_question_model():
+    question_model = "allenai/t5-small-squad2-question-generation"
+    tokenizer = T5Tokenizer.from_pretrained(question_model)
+    model = T5ForConditionalGeneration.from_pretrained(question_model)
+
+load_question_model()
 
 def generate_question(text, **generator_args):
     input_ids = tokenizer.encode(text, return_tensors="pt")
