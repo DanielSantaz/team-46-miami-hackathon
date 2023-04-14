@@ -2,17 +2,21 @@ import streamlit as st
 import easyocr
 from PIL import Image
 import io
-from transformers import pipeline
-from pprint import pprint
-from tqdm.auto import tqdm
-from haystack.nodes import QuestionGenerator, BM25Retriever, FARMReader
-from haystack.document_stores import ElasticsearchDocumentStore
-from haystack.pipelines import (
-    QuestionGenerationPipeline,
-    RetrieverQuestionGenerationPipeline,
-    QuestionAnswerGenerationPipeline,
-)
-from haystack.utils import launch_es, print_questions
+from transformers import pipeline, T5Config, T5ForConditionalGeneration, T5Tokenizer
+
+# question generator setup
+question_model = "allenai/t5-small-squad2-question-generation"
+tokenizer = T5Tokenizer.from_pretrained(question_model)
+model = T5ForConditionalGeneration.from_pretrained(question_model)
+
+def generate_question(text, **generator_args):
+    input_ids = tokenizer.encode(text, return_tensors="pt")
+    res = model.generate(input_ids, **generator_args)
+    output = tokenizer.batch_decode(res, skip_special_tokens=True)
+    return output
+
+#answer generator setup
+answer_model = "consciousAI/question-answering-roberta-base-s"
 
 st.set_page_config(page_title="Team 46", page_icon="📖")
 
@@ -84,6 +88,7 @@ with tab1:
 
                     # prepare extracted text
                     text = [x[1] for x in result]
+                    st.session_state.sentence_list = text
                     extracted_text_header = st.write("Extracted Text:")
                     st.session_state.text_length = len(text)
                     st.session_state.extracted_text = ' '.join(text)
@@ -108,7 +113,26 @@ with tab1:
         if st.session_state.quiz_button_clicked:
             update_sidebar()
             display_buttons()
-            st.write("QUIZ")
+            paragraph = ""
+            paragraphs = []
+            for sentence in st.session_state.sentence_list:
+                paragraph += " " + sentence
+                if len(paragraph) > 200:
+                    paragraphs.append(paragraph)
+                    paragraph = ""
+            num_questions = min(len(paragraphs), 5)
+            questions_answers = []
+            question_answerer = pipeline("question-answering", model=answer_model)
+            for paragraph in paragraphs[:num_questions]:
+                question_list = generate_question(paragraph)
+                question = question_list[0]
+                answer = question_answerer(question=question, context=paragraph)
+                questions_answers.append((question, answer['answer']))
+            for qa in questions_answers:
+                "Question:"
+                qa[0]
+                "Answer:"
+                qa[1]
 
     elif choice == "Text":
         uploaded_file = st.sidebar.file_uploader(
