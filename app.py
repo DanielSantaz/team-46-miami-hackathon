@@ -3,6 +3,7 @@ import easyocr
 from PIL import Image
 import io
 from transformers import pipeline, T5ForConditionalGeneration, T5Tokenizer
+import requests
 
 st.set_page_config(page_title="Team 46", page_icon="📖")
 
@@ -11,6 +12,7 @@ question_model = "allenai/t5-small-squad2-question-generation"
 tokenizer = T5Tokenizer.from_pretrained(question_model)
 model = T5ForConditionalGeneration.from_pretrained(question_model)
 
+
 @st.cache_resource
 def generate_question(text, **generator_args):
     input_ids = tokenizer.encode(text, return_tensors="pt")
@@ -18,7 +20,8 @@ def generate_question(text, **generator_args):
     output = tokenizer.batch_decode(res, skip_special_tokens=True)
     return output
 
-#answer generator setup
+
+# answer generator setup
 answer_model = "consciousAI/question-answering-roberta-base-s"
 
 with st.sidebar:
@@ -39,6 +42,7 @@ if "new_source_summary" not in st.session_state:
     st.session_state.new_source_summary = False
 if "new_source_quiz" not in st.session_state:
     st.session_state.new_source_quiz = False
+
 
 def summary_button_callback():
     st.session_state.summary_button_clicked = True
@@ -80,6 +84,7 @@ with tab1:
             # get text from image using easyocr
             if uploaded_file is not None:
                 with st.spinner("Extracting text..."):
+
                     image = Image.open(uploaded_file)
                     st.sidebar.write("Original image")
                     st.sidebar.image(image)
@@ -101,21 +106,27 @@ with tab1:
                     st.session_state.new_source_summary = True
                     st.session_state.new_source_quiz = True
 
-
         # summary option
         if st.session_state.summary_button_clicked:
             update_sidebar()
             display_buttons()
             with st.spinner("Summarizing text..."):
                 if st.session_state.new_source_summary:
-                    summarizer = pipeline(
-                    "summarization", model='jazzisfuture/new_summary_t5_small')
-                    summary_raw = summarizer(st.session_state.extracted_text,
-                                        max_length=250, min_length=30, do_sample=False)
-                    st.session_state.summary = summary_raw[0]["summary_text"]
+                    querystring = {"sentences": "5",
+                                   "txt": st.session_state.extracted_text}
+
+                    headers = {
+                        "Accept": "application/json",
+                        "X-RapidAPI-Key": "5b64383f18msh37a79f12c4f83e3p1fc6e5jsn69b03780ea58",
+                        "X-RapidAPI-Host": "meaningcloud-summarization-v1.p.rapidapi.com"
+                    }
+
+                    response = requests.request(
+                        "GET", "https://meaningcloud-summarization-v1.p.rapidapi.com/summarization-1.0", headers=headers, params=querystring)
+                    data = response.json()
+                    st.session_state.summary = data['summary']
                     st.session_state.new_source_summary = False
                 st.write(st.session_state.summary)
-
 
         # quiz option
         if st.session_state.quiz_button_clicked:
@@ -132,11 +143,13 @@ with tab1:
                             paragraph = ""
                     num_questions = min(len(paragraphs), 5)
                     questions_answers = []
-                    question_answerer = pipeline("question-answering", model=answer_model)
+                    question_answerer = pipeline(
+                        "question-answering", model=answer_model)
                     for paragraph in paragraphs[:num_questions]:
                         question_list = generate_question(paragraph)
                         question = question_list[0]
-                        answer = question_answerer(question=question, context=paragraph)
+                        answer = question_answerer(
+                            question=question, context=paragraph)
                         questions_answers.append((question, answer['answer']))
                     st.session_state.questions_answers = questions_answers
                     st.session_state.new_source_quiz = False
