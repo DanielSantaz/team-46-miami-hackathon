@@ -6,17 +6,22 @@ from io import StringIO
 import random
 from transformers import pipeline, T5ForConditionalGeneration, T5Tokenizer
 import requests
+import time
 import pandas as pd
 import plotly.express as px
 import numpy as np
 from sklearn.linear_model import LinearRegression
+import plotly.graph_objs as go
 
 st.set_page_config(page_title="Team 46", page_icon="📖")
-
 # load in css
+
+
 def local_css(file_name):
     with open(file_name) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+
 local_css("style.css")
 
 # question generator setup
@@ -37,7 +42,7 @@ def generate_question(text, **generator_args):
 answer_model = "consciousAI/question-answering-roberta-base-s"
 
 with st.sidebar:
-    st.title("Title")
+    st.title("DeepLearn")
     choices = ["Image", "Text"]
     choice = st.sidebar.selectbox(
         "Source", choices, help="You can upload an image or text file")
@@ -55,6 +60,12 @@ if "new_source_summary" not in st.session_state:
     st.session_state.new_source_summary = False
 if "new_source_quiz" not in st.session_state:
     st.session_state.new_source_quiz = False
+if "guess" not in st.session_state:
+    st.session_state.guess = ""
+if "questions_answers" not in st.session_state:
+    st.session_state.questions_answers = None
+if "mock" not in st.session_state:
+    st.session_state.mock = False
 
 
 def summary_button_callback():
@@ -70,22 +81,34 @@ def display_buttons():
     col1, col2 = st.columns(2)
     with col1:
         summary_button = st.button(
-            "Summarize", on_click=summary_button_callback, key="summary_button", use_container_width=True
+            ":robot_face: Summarize :scissors:", on_click=summary_button_callback, key="summary_button", use_container_width=True
         )
     with col2:
         quiz_button = st.button(
-            "Quiz me!", on_click=quiz_button_callback, key="quiz_button", use_container_width=True
+            ":robot_face: Quiz me! :pencil2:", on_click=quiz_button_callback, key="quiz_button", use_container_width=True
         )
 
 
 def update_sidebar():
     st.sidebar.write("Original image")
     st.sidebar.image(st.session_state.image)
-    with st.expander("See original text"):
-        st.write(st.session_state.extracted_text)
+    with st.expander("See original text", expanded=True):
+        st.write(easy_reading_text(st.session_state.extracted_text))
 
 
-tab1, tab2 = st.tabs(["Main", "Analysis"])
+def easy_reading_text(text):
+    words = text.split(' ')
+    bold_words = []
+    for word in words:
+        if len(word) < 2:
+            bold_words.append("**" + word + "**")
+            continue
+        num = int(len(word) / 2)
+        bold_words.append("**" + word[:num] + "**" + word[num:])
+    return ' '.join(bold_words)
+
+
+tab1, tab2, tab3 = st.tabs([":open_book: Main", ":student: Student", ":male-technologist: Professor"])
 
 with tab1:
     if choice == "Image":
@@ -111,9 +134,11 @@ with tab1:
                     # prepare extracted text
                     text = [x[1] for x in result]
                     st.session_state.sentence_list = text
-                    extracted_text_header = st.write("Extracted Text:")
+                    extracted_text_header = st.header(
+                        "Extracted Text :open_book:")
                     st.session_state.extracted_text = ' '.join(text)
-                    st.write(st.session_state.extracted_text)
+                    st.write(easy_reading_text(
+                        st.session_state.extracted_text))
                     display_buttons()
                     st.session_state.new_source_summary = True
                     st.session_state.new_source_quiz = True
@@ -125,55 +150,70 @@ with tab1:
             with st.spinner("Summarizing text..."):
                 if st.session_state.new_source_summary:
                     summarizer = pipeline(
-                        "summarization", model='jazzisfuture/new_summary_t5_small')
+                        "summarization", model='facebook/bart-large-cnn')
                     summary_raw = summarizer(st.session_state.extracted_text,
-                                             max_length=250, min_length=30, do_sample=False)
+                                             max_length=200, min_length=30, do_sample=False)
                     st.session_state.summary = summary_raw[0]["summary_text"]
                     st.session_state.new_source_summary = False
-                st.header("Summary:")
-                st.write(st.session_state.summary)
+                st.header("Summary :pencil2:")
+                st.write(easy_reading_text(st.session_state.summary))
 
         # quiz option
         if st.session_state.quiz_button_clicked:
             update_sidebar()
             display_buttons()
-            with st.spinner("Generating questions..."):
-                if st.session_state.new_source_quiz:
-                    paragraph = ""
-                    paragraphs = []
-                    for sentence in st.session_state.sentence_list:
-                        paragraph += " " + sentence
-                        if len(paragraph) > 200:
-                            paragraphs.append(paragraph)
-                            paragraph = ""
-                    num_questions = min(len(paragraphs), 5)
-                    questions_answers = []
-                    question_answerer = pipeline(
-                        "question-answering", model=answer_model)
-                    for paragraph in paragraphs[:num_questions]:
-                        question_list = generate_question(paragraph)
-                        question = question_list[0]
-                        answer = question_answerer(
-                            question=question, context=paragraph)
-                        questions_answers.append((question, answer['answer']))
-                    st.session_state.questions_answers = questions_answers
-                    st.session_state.new_source_quiz = False
+            if st.session_state.new_source_quiz and st.session_state.questions_answers == None:
+                with st.spinner("Generating questions..."):
+                    if st.session_state.new_source_quiz:
+                        paragraph = ""
+                        paragraphs = []
+                        for sentence in st.session_state.sentence_list:
+                            paragraph += " " + sentence
+                            if len(paragraph) > 200:
+                                paragraphs.append(paragraph)
+                                paragraph = ""
+                        num_questions = min(len(paragraphs), 5)
+                        questions_answers = []
+                        question_answerer = pipeline(
+                            "question-answering", model=answer_model)
+                        for paragraph in paragraphs[:num_questions]:
+                            question_list = generate_question(paragraph)
+                            question = question_list[0]
+                            answer = question_answerer(
+                                question=question, context=paragraph)
+                            questions_answers.append(
+                                (question, answer['answer']))
+                        st.session_state.questions_answers = questions_answers
+                        st.session_state.new_source_quiz = False
 
-                while st.session_state.current_question == st.session_state.current_question_temp:
-                    st.session_state.current_question = (random.randint(0, 4))
-                question = st.session_state.questions_answers[st.session_state.current_question][0]
-                answer = st.session_state.questions_answers[st.session_state.current_question][1]
-                st.session_state.current_question_temp = st.session_state.current_question
+                # while st.session_state.current_question == st.session_state.current_question_temp:
+                #     st.session_state.current_question = (random.randint(0, 4))
+                # question = st.session_state.questions_answers[st.session_state.current_question][0]
+                # answer = st.session_state.questions_answers[st.session_state.current_question][1]
+                # st.session_state.current_question_temp = st.session_state.current_question
 
-                st.markdown(
-                    f'<div class="blockquote-wrapper"><div class="blockquote"><h1><span style="color:#1e1e1e;">{question}</span></h1><h4>&mdash; Click "Quiz me!" for another question!</em></h4></div></div>',
-                    unsafe_allow_html=True,
-                )
+                with st.spinner("Pop quiz time! :sparkles: :100:"):
+                    for i in range(5):
+                        st.session_state.current_question = i
+                        question = st.session_state.questions_answers[st.session_state.current_question][0]
+                        answer = st.session_state.questions_answers[st.session_state.current_question][1]
 
-                st.markdown(
-                    f"<div class='answer'><span style='font-weight: bold; color:#6d7284;'>Answer:</span><br><br>{answer}</div>",
-                    unsafe_allow_html=True,
-                )
+                        question_element = st.markdown(
+                            f'<div class="blockquote-wrapper"><div class="blockquote"><h1><span style="color:#1e1e1e;">{question}</span></h1><h4>&mdash; Click "Quiz me!" for another question!</em></h4></div></div>',
+                            unsafe_allow_html=True,
+                        )
+
+                        answer_element = None
+                        with st.spinner("Revealing answer in 5 seconds..."):
+                            time.sleep(5)
+                            answer_element = st.markdown(
+                                f"<div class='answer'><span style='font-weight: bold; color:#6d7284;'>Answer:</span><br><br>{answer}</div>",
+                                unsafe_allow_html=True,
+                            )
+                        time.sleep(2)
+                        question_element.empty()
+                        answer_element.empty()
+                        st.balloons()
 
     elif choice == "Text":
         uploaded_file = st.sidebar.file_uploader(
@@ -220,6 +260,18 @@ with tab2:
     quiz_data = pd.DataFrame({"Quiz": quiz_names, "Score": quiz_scores,
                              "Quiz Number": list(range(1, len(quiz_scores) + 1))})
 
+    # All quizzes chart
+    st.header("Quiz Scores by Topic")
+
+    fig = px.line_polar(quiz_data, r='Score', theta='Quiz', line_close=True, range_r=[
+                        (min(quiz_scores)-5), max(quiz_scores)])
+
+    # Change the range_r numbers color to black
+    fig.update_polars(angularaxis=dict(showline=True, linecolor="black",
+                      linewidth=2, gridcolor="white", gridwidth=1, tickfont=dict(color="white")))
+
+    st.plotly_chart(fig, theme="streamlit", use_container_width=True)
+
     # Summary chart
     average_score = quiz_data["Score"].mean()
     min_score = quiz_data["Score"].min()
@@ -233,14 +285,6 @@ with tab2:
     fig = px.bar(summary_data, x="Statistic", y="Score",
                  title="", color_discrete_sequence=["#9EE6CF"])
     fig.update_xaxes(title_text="")
-    fig.update_yaxes(title_text="Score")
-    st.plotly_chart(fig, theme="streamlit", use_container_width=True)
-
-    # All quizes chart
-    st.header("Quiz Scores by Topic")
-    fig = px.bar(quiz_data, x="Quiz", y="Score", title="",
-                 color_discrete_sequence=["#9EE6CF"])
-    fig.update_xaxes(title_text="Quiz")
     fig.update_yaxes(title_text="Score")
     st.plotly_chart(fig, theme="streamlit", use_container_width=True)
 
@@ -260,7 +304,7 @@ with tab2:
         x=quiz_data["Quiz Number"], y=y_pred.reshape(-1), markers=False).data[0])
     fig.update_xaxes(title_text="Quiz Number")
     fig.update_yaxes(title_text="Score")
-    st.plotly_chart(fig, theme="streamlit", use_container_width=True)
+    st.plotly_chart(fig, theme=None, use_container_width=True)
 
     # Predicts next score, creates dataframe for previous score and predicted
     next_quiz_number = len(quiz_scores) + 1
@@ -278,4 +322,105 @@ with tab2:
                  title="", color_discrete_sequence=["#9EE6CF"])
     fig.update_xaxes(title_text="")
     fig.update_yaxes(title_text="Score")
+    st.plotly_chart(fig, theme="streamlit", use_container_width=True)
+
+with tab3:
+
+    # Number of students
+    num_students = 10
+
+    # Mock data for all students
+    all_students_scores = [
+        [75, 90, 85, 78, 92, 88, 96, 81, 95, 89, 82, 91, 84, 99, 73],
+        [68, 84, 76, 82, 89, 78, 91, 74, 92, 86, 81, 87, 79, 97, 79],
+        [72, 88, 81, 77, 95, 83, 94, 80, 93, 84, 79, 90, 82, 98, 85],
+        [65, 81, 74, 71, 88, 75, 87, 70, 86, 80, 75, 84, 78, 95, 69],
+        [78, 92, 86, 83, 97, 89, 99, 85, 98, 90, 84, 93, 87, 100, 75],
+        [71, 85, 80, 76, 90, 82, 93, 78, 91, 83, 77, 88, 81, 96, 82],
+        [74, 88, 83, 80, 93, 87, 96, 82, 95, 89, 83, 92, 86, 99, 74],
+        [67, 80, 75, 72, 86, 78, 89, 71, 88, 82, 76, 85, 79, 94, 83],
+        [70, 84, 79, 75, 89, 81, 92, 76, 91, 85, 80, 87, 82, 97, 80],
+        [73, 87, 82, 78, 92, 85, 95, 79, 94, 88, 83, 90, 85, 98, 77],
+    ]
+
+    all_students_data = []
+
+    for i in range(num_students):
+        student_data = pd.DataFrame({"Quiz": quiz_names,
+                                     "Score": all_students_scores[i],
+                                     "Quiz Number": list(range(1, len(quiz_scores) + 1)),
+                                     "Student ID": [i+1]*len(quiz_scores)})
+        all_students_data.append(student_data)
+
+    all_students_data_combined = pd.concat(
+        all_students_data, ignore_index=True)
+
+    # Get the latest quiz scores for each student
+    latest_quiz_scores = [scores[-1] for scores in all_students_scores]
+
+    # Linear Regression of Quiz Scores for All Students
+    st.header("Linear Regression of Quiz Scores for All Students")
+    fig = go.Figure()
+
+    combined_data = pd.concat(all_students_data, ignore_index=True)
+
+    X = combined_data["Quiz Number"].values.reshape(-1, 1)
+    y = combined_data["Score"].values.reshape(-1, 1)
+    regression_model = LinearRegression()
+    regression_model.fit(X, y)
+
+    y_pred = regression_model.predict(X)
+
+    for student_id, student_data in enumerate(all_students_data):
+        fig.add_trace(go.Scatter(
+            x=student_data["Quiz Number"], y=student_data["Score"], mode='markers', name=f"Student {student_id + 1}"))
+
+    fig.add_trace(go.Scatter(x=combined_data["Quiz Number"], y=y_pred.reshape(
+        -1), mode='lines', name="All Students Regression"))
+
+    fig.update_xaxes(title_text="Quiz Number")
+    fig.update_yaxes(title_text="Score")
+    st.plotly_chart(fig, theme=None, use_container_width=True)
+
+    # Create the table for performance on the last quiz
+    fig = go.Figure()
+
+    st.header("Class Quiz Scores")
+    header_labels = ['Student', 'Test Name', 'Performance']
+    for i, label in enumerate(header_labels):
+        fig.add_shape(type='rect', xref='x', yref='y', x0=i - 0.5, x1=i + 0.5, y0=len(latest_quiz_scores),
+                      y1=len(latest_quiz_scores) + 1, fillcolor='paleturquoise', line=dict(color='white'))
+        fig.add_annotation(x=i, y=len(latest_quiz_scores) + 0.25,
+                           text=label, font=dict(size=12, color='black'), showarrow=False)
+
+    for row, score in enumerate(latest_quiz_scores):
+        green_percentage = score / 100
+        red_percentage = 1 - green_percentage
+
+        # Add student information
+        fig.add_shape(type='rect', xref='x', yref='y', x0=-0.5, x1=0.5,
+                      y0=row, y1=row + 1, fillcolor='white', line=dict(color='white'))
+        fig.add_annotation(
+            x=0, y=row + 0.5, text=f"Student {row + 1}", font=dict(size=11, color='black'), showarrow=False)
+
+        # Add test name
+        fig.add_shape(type='rect', xref='x', yref='y', x0=0.5, x1=1.5,
+                      y0=row, y1=row + 1, fillcolor='white', line=dict(color='white'))
+        fig.add_annotation(
+            x=1, y=row + 0.5, text=quiz_names[-1], font=dict(size=11, color='black'), showarrow=False)
+
+        # Add performance
+        fig.add_shape(type='rect', xref='x', yref='y', x0=1.5, x1=1.5 + green_percentage,
+                      y0=row, y1=row + 1, fillcolor='rgba(0, 255, 0, 1)', line=dict(color='white'))
+        fig.add_shape(type='rect', xref='x', yref='y', x0=1.5 + green_percentage, x1=2.5,
+                      y0=row, y1=row + 1, fillcolor='rgba(255, 0, 0, 1)', line=dict(color='white'))
+        fig.add_annotation(
+            x=2, y=row + 0.5, text=f"{score}%", font=dict(size=11, color='black'), showarrow=False)
+
+    fig.update_xaxes(showgrid=False, zeroline=False,
+                     visible=False, range=[-0.5, 2.5])
+    fig.update_yaxes(showgrid=False, zeroline=False, visible=False,
+                     range=[-0.5, len(latest_quiz_scores) + 0.5], autorange='reversed')
+    fig.update_layout(title='Latest Quiz Performance', width=800, height=40 *
+                      (len(latest_quiz_scores) + 1), margin=dict(t=50, b=0, l=0, r=0))
     st.plotly_chart(fig, theme="streamlit", use_container_width=True)
