@@ -14,7 +14,6 @@ from sklearn.linear_model import LinearRegression
 import plotly.graph_objs as go
 
 st.set_page_config(page_title="DeepLearn", page_icon="📖")
-st.session_state
 
 # load in css
 def local_css(file_name):
@@ -42,7 +41,9 @@ def generate_question(text, **generator_args):
 answer_model = "consciousAI/question-answering-roberta-base-s"
 
 with st.sidebar:
-    st.title("DeepLearn")
+    image = Image.open("image/logo.png")
+    st.sidebar.image(image)
+
     choices = ["Image", "Text"]
     choice = st.sidebar.selectbox(
         "Source", choices, help="You can upload an image or text file")
@@ -66,13 +67,15 @@ if "questions_answers" not in st.session_state:
     st.session_state.questions_answers = None
 if "mock" not in st.session_state:
     st.session_state.mock = True
+if "start" not in st.session_state:
+    st.session_state.start = True
 
 # =================================================== MOCK DATA START
 mock_summary = '"Robot" comes from the Czech word robota, meaning"drudgery;" and first appeared in the 1921 play RUR. More than a million industrial robots are now in use, nearly half of them in Japan. Leonardo da Vinci drew up plans for an armored humanoid machine in 1495.'
 mock_questions_answers = []
 mock_questions_answers.append(("What is the name of the robots that scout for roadside bombs?", "Talon bots"))
 mock_questions_answers.append(("What is the name of the robots that have logged 10.5 miles across the Red Planet", "Spirit and Opportunity"))
-mock_questions_answers.append(("What is the Czech word for robota?", "More than a million"))
+mock_questions_answers.append(("What was the name of the first robot built by Leonardo da Vinci?", "armored humanoid machine"))
 mock_questions_answers.append(("How many industrial robots are now in use?", "More than a million"))
 mock_questions_answers.append(("What is the Czech word for robota?", "drudgery"))
 # =================================================== MOCK DATA END
@@ -121,6 +124,9 @@ tab1, tab2, tab3 = st.tabs(
     [":open_book: Main", ":student: Student", ":male-technologist: Professor"])
 
 with tab1:
+    if st.session_state.start:
+        st.header(":arrow_left: Upload a file to begin :sparkles:")
+        st.session_state.start = False
     if choice == "Image":
         uploaded_file = st.sidebar.file_uploader(
             "", type=['png'], help="Upload a file to begin!")
@@ -222,7 +228,7 @@ with tab1:
                         answer = st.session_state.questions_answers[st.session_state.current_question][1]
 
                         question_element = st.markdown(
-                            f'<div class="blockquote-wrapper"><div class="blockquote"><h1><span style="color:#1e1e1e;">{question}</span></h1><h4>&mdash; Click "Quiz me!" for another question!</em></h4></div></div>',
+                            f'<div class="blockquote-wrapper"><div class="blockquote"><h1><span style="color:#1e1e1e;">{question}</span></h1><h4>&mdash; - DeepLearn</em></h4></div></div>',
                             unsafe_allow_html=True,
                         )
 
@@ -284,7 +290,7 @@ with tab2:
                              "Quiz Number": list(range(1, len(quiz_scores) + 1))})
 
     # All quizzes chart
-    st.header("Quiz Scores by Topic")
+    st.header("Quiz Scores by Topic :sparkles:")
     st.markdown(
         "A visualization of your strengths and weaknesses")
 
@@ -301,7 +307,7 @@ with tab2:
     min_score = quiz_data["Score"].min()
     max_score = quiz_data["Score"].max()
 
-    st.header("Summary Statistics")
+    st.header("Summary Statistics :sparkles:")
     st.markdown("A quick summary of your quiz scores")
     summary_data = pd.DataFrame({
         "Statistic": ["Average Score", "Lowest Score", "Highest Score"],
@@ -323,7 +329,7 @@ with tab2:
     y_pred = regression_model.predict(X)
 
     # Quiz scores with linear regression chart
-    st.header("Linear Regression of Quiz Scores")
+    st.header("Linear Regression of Quiz Scores :sparkles:")
     st.markdown("An indication of how your scores a trending")
 
     fig = px.scatter(quiz_data, x="Quiz Number", y="Score",
@@ -390,7 +396,7 @@ with tab3:
     latest_quiz_scores = [scores[-1] for scores in all_students_scores]
 
     # Linear Regression of Quiz Scores for All Students
-    st.header("Linear Regression of Quiz Scores for All Students")
+    st.header("Linear Regression of Quiz Scores for All Students :sparkles:")
     st.markdown("Latest score trends for your students")
     fig = go.Figure()
 
@@ -417,7 +423,7 @@ with tab3:
     # Create the table for performance on the last quiz
     fig = go.Figure()
 
-    st.header("Class Quiz Scores")
+    st.header("Class Quiz Scores :sparkles:")
     st.markdown("Tracks recent student performance")
 
 
