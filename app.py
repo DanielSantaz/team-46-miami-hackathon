@@ -3,18 +3,14 @@ import easyocr
 from PIL import Image
 import io
 from transformers import pipeline, T5Config, T5ForConditionalGeneration, T5Tokenizer
+from question_generation import pipeline as qgp
+
+st.set_page_config(page_title="Team 46", page_icon="📖")
 
 # question generator setup
-question_model = None
-model = None
-tokenizer = None
-@st.cache
-def load_question_model():
-    question_model = "allenai/t5-small-squad2-question-generation"
-    tokenizer = T5Tokenizer.from_pretrained(question_model)
-    model = T5ForConditionalGeneration.from_pretrained(question_model)
-
-load_question_model()
+question_model = "allenai/t5-small-squad2-question-generation"
+tokenizer = T5Tokenizer.from_pretrained(question_model)
+model = T5ForConditionalGeneration.from_pretrained(question_model)
 
 def generate_question(text, **generator_args):
     input_ids = tokenizer.encode(text, return_tensors="pt")
@@ -24,8 +20,6 @@ def generate_question(text, **generator_args):
 
 #answer generator setup
 answer_model = "consciousAI/question-answering-roberta-base-s"
-
-st.set_page_config(page_title="Team 46", page_icon="📖")
 
 with st.sidebar:
     st.title("Title")
@@ -41,7 +35,10 @@ if "current_question" not in st.session_state:
     st.session_state.current_question = 0
 if "current_question_temp" not in st.session_state:
     st.session_state.current_question_temp = 0
-
+if "new_source_summary" not in st.session_state:
+    st.session_state.new_source_summary = False
+if "new_source_quiz" not in st.session_state:
+    st.session_state.new_source_quiz = False
 
 def summary_button_callback():
     st.session_state.summary_button_clicked = True
@@ -84,8 +81,9 @@ with tab1:
             if uploaded_file is not None:
                 with st.spinner("Extracting text..."):
                     image = Image.open(uploaded_file)
+                    st.sidebar.write("Original image")
+                    st.sidebar.image(image)
                     st.session_state.image = image
-                    shown_image_element = st.image(image)
                     img_byte_arr = io.BytesIO()
                     image.save(img_byte_arr, format='PNG',
                                subsampling=0, quality=100)
@@ -97,49 +95,56 @@ with tab1:
                     text = [x[1] for x in result]
                     st.session_state.sentence_list = text
                     extracted_text_header = st.write("Extracted Text:")
-                    st.session_state.text_length = len(text)
                     st.session_state.extracted_text = ' '.join(text)
                     st.write(st.session_state.extracted_text)
                     display_buttons()
-                st.sidebar.write("Original image")
-                st.sidebar.image(st.session_state.image)
-                shown_image_element = st.empty()
+                    st.session_state.new_source_summary = True
+                    st.session_state.new_source_quiz = True
+
 
         # summary option
         if st.session_state.summary_button_clicked:
             update_sidebar()
-            summarizer = pipeline(
-                "summarization", model="facebook/bart-large-cnn")
+            display_buttons()
             with st.spinner("Summarizing text..."):
-                display_buttons()
-                summary = summarizer(st.session_state.extracted_text,
-                                     max_length=150, min_length=30, do_sample=False)
-                st.write(summary[0]["summary_text"])
+                if st.session_state.new_source_summary:
+                    summarizer = pipeline(
+                    "summarization", model='jazzisfuture/new_summary_t5_small')
+                    summary_raw = summarizer(st.session_state.extracted_text,
+                                        max_length=250, min_length=30, do_sample=False)
+                    st.session_state.summary = summary_raw[0]["summary_text"]
+                    st.session_state.new_source_summary = False
+                st.write(st.session_state.summary)
+
 
         # quiz option
         if st.session_state.quiz_button_clicked:
             update_sidebar()
             display_buttons()
-            paragraph = ""
-            paragraphs = []
-            for sentence in st.session_state.sentence_list:
-                paragraph += " " + sentence
-                if len(paragraph) > 200:
-                    paragraphs.append(paragraph)
+            with st.spinner("Generating questions..."):
+                if st.session_state.new_source_quiz:
                     paragraph = ""
-            num_questions = min(len(paragraphs), 5)
-            questions_answers = []
-            question_answerer = pipeline("question-answering", model=answer_model)
-            for paragraph in paragraphs[:num_questions]:
-                question_list = generate_question(paragraph)
-                question = question_list[0]
-                answer = question_answerer(question=question, context=paragraph)
-                questions_answers.append((question, answer['answer']))
-            for qa in questions_answers:
-                "Question:"
-                qa[0]
-                "Answer:"
-                qa[1]
+                    paragraphs = []
+                    for sentence in st.session_state.sentence_list:
+                        paragraph += " " + sentence
+                        if len(paragraph) > 200:
+                            paragraphs.append(paragraph)
+                            paragraph = ""
+                    num_questions = min(len(paragraphs), 5)
+                    questions_answers = []
+                    question_answerer = pipeline("question-answering", model=answer_model)
+                    for paragraph in paragraphs[:num_questions]:
+                        question_list = generate_question(paragraph)
+                        question = question_list[0]
+                        answer = question_answerer(question=question, context=paragraph)
+                        questions_answers.append((question, answer['answer']))
+                    st.session_state.questions_answers = questions_answers
+                    st.session_state.new_source_quiz = False
+                for qa in st.session_state.questions_answers:
+                    "Question:"
+                    qa[0]
+                    "Answer:"
+                    qa[1]
 
     elif choice == "Text":
         uploaded_file = st.sidebar.file_uploader(
