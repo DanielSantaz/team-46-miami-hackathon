@@ -2,10 +2,22 @@ import streamlit as st
 import easyocr
 from PIL import Image
 import io
+from io import StringIO
+import random
 from transformers import pipeline, T5ForConditionalGeneration, T5Tokenizer
 import requests
+import pandas as pd
+import plotly.express as px
+import numpy as np
+from sklearn.linear_model import LinearRegression
 
 st.set_page_config(page_title="Team 46", page_icon="📖")
+
+# load in css
+def local_css(file_name):
+    with open(file_name) as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+local_css("style.css")
 
 # question generator setup
 question_model = "allenai/t5-small-squad2-question-generation"
@@ -27,7 +39,8 @@ answer_model = "consciousAI/question-answering-roberta-base-s"
 with st.sidebar:
     st.title("Title")
     choices = ["Image", "Text"]
-    choice = st.sidebar.selectbox("Source", choices)
+    choice = st.sidebar.selectbox(
+        "Source", choices, help="You can upload an image or text file")
 
 # init states
 if "summary_button_clicked" not in st.session_state:
@@ -37,7 +50,7 @@ if "quiz_button_clicked" not in st.session_state:
 if "current_question" not in st.session_state:
     st.session_state.current_question = 0
 if "current_question_temp" not in st.session_state:
-    st.session_state.current_question_temp = 0
+    st.session_state.current_question_temp = -1
 if "new_source_summary" not in st.session_state:
     st.session_state.new_source_summary = False
 if "new_source_quiz" not in st.session_state:
@@ -61,7 +74,7 @@ def display_buttons():
         )
     with col2:
         quiz_button = st.button(
-            "Pop Quiz", on_click=quiz_button_callback, key="quiz_button", use_container_width=True
+            "Quiz me!", on_click=quiz_button_callback, key="quiz_button", use_container_width=True
         )
 
 
@@ -77,14 +90,13 @@ tab1, tab2 = st.tabs(["Main", "Analysis"])
 with tab1:
     if choice == "Image":
         uploaded_file = st.sidebar.file_uploader(
-            "", type=['jpg', 'png', 'jpeg'])
+            "", type=['png'], help="Upload a file to begin!")
 
         if not st.session_state.summary_button_clicked and not st.session_state.quiz_button_clicked:
             image = None
             # get text from image using easyocr
-            if uploaded_file is not None:
+            if uploaded_file is not None and not st.session_state.new_source_summary and not st.session_state.new_source_quiz:
                 with st.spinner("Extracting text..."):
-
                     image = Image.open(uploaded_file)
                     st.sidebar.write("Original image")
                     st.sidebar.image(image)
@@ -112,19 +124,11 @@ with tab1:
             display_buttons()
             with st.spinner("Summarizing text..."):
                 if st.session_state.new_source_summary:
-                    querystring = {"sentences": "5",
-                                   "txt": st.session_state.extracted_text}
-
-                    headers = {
-                        "Accept": "application/json",
-                        "X-RapidAPI-Key": "5b64383f18msh37a79f12c4f83e3p1fc6e5jsn69b03780ea58",
-                        "X-RapidAPI-Host": "meaningcloud-summarization-v1.p.rapidapi.com"
-                    }
-
-                    response = requests.request(
-                        "GET", "https://meaningcloud-summarization-v1.p.rapidapi.com/summarization-1.0", headers=headers, params=querystring)
-                    data = response.json()
-                    st.session_state.summary = data['summary']
+                    summarizer = pipeline(
+                        "summarization", model='jazzisfuture/new_summary_t5_small')
+                    summary_raw = summarizer(st.session_state.extracted_text,
+                                             max_length=250, min_length=30, do_sample=False)
+                    st.session_state.summary = summary_raw[0]["summary_text"]
                     st.session_state.new_source_summary = False
                 st.write(st.session_state.summary)
 
@@ -153,18 +157,124 @@ with tab1:
                         questions_answers.append((question, answer['answer']))
                     st.session_state.questions_answers = questions_answers
                     st.session_state.new_source_quiz = False
-                for qa in st.session_state.questions_answers:
-                    "Question:"
-                    qa[0]
-                    "Answer:"
-                    qa[1]
+
+                while st.session_state.current_question == st.session_state.current_question_temp:
+                    st.session_state.current_question = (random.randint(0, 4))
+                question = st.session_state.questions_answers[st.session_state.current_question][0]
+                answer = st.session_state.questions_answers[st.session_state.current_question][1]
+                st.session_state.current_question_temp = st.session_state.current_question
+
+                st.markdown(
+                    f'<div class="blockquote-wrapper"><div class="blockquote"><h1><span style="color:#1e1e1e;">{question}</span></h1><h4>&mdash; Click "Quiz me!" for another question!</em></h4></div></div>',
+                    unsafe_allow_html=True,
+                )
+
+                st.markdown(
+                    f"<div class='answer'><span style='font-weight: bold; color:#6d7284;'>Answer:</span><br><br>{answer}</div>",
+                    unsafe_allow_html=True,
+                )
 
     elif choice == "Text":
         uploaded_file = st.sidebar.file_uploader(
-            "", type=['txt', 'doc', 'pdf'])
+            "", type=['txt'])
+
+        if not st.session_state.summary_button_clicked and not st.session_state.quiz_button_clicked:
+            if uploaded_file is not None:
+                # To read file as bytes:
+                bytes_data = uploaded_file.getvalue()
+                st.write(bytes_data)
+
+                # To convert to a string based IO:
+                stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
+                st.write(stringio)
+
+                # To read file as string:
+                text = stringio.read()
 
     st.session_state.summary_button_clicked = False
     st.session_state.quiz_button_clicked = False
 
 with tab2:
-    pass
+    # Mock data
+    quiz_scores = [75, 90, 85, 78, 92, 88, 96, 81, 95, 89, 82, 91, 84, 77, 99]
+
+    quiz_names = [
+        "Introduction to AI",
+        "Machine Learning Basics",
+        "Deep Learning",
+        "Neural Networks",
+        "Computer Vision",
+        "Natural Language Processing",
+        "Reinforcement Learning",
+        "Generative Models",
+        "AI Ethics",
+        "Robotics",
+        "AI in Healthcare",
+        "AI in Finance",
+        "AI in Agriculture",
+        "AI in Manufacturing",
+        "AI in Transportation",
+    ]
+
+    quiz_data = pd.DataFrame({"Quiz": quiz_names, "Score": quiz_scores,
+                             "Quiz Number": list(range(1, len(quiz_scores) + 1))})
+
+    # Summary chart
+    average_score = quiz_data["Score"].mean()
+    min_score = quiz_data["Score"].min()
+    max_score = quiz_data["Score"].max()
+
+    st.header("Summary Statistics")
+    summary_data = pd.DataFrame({
+        "Statistic": ["Average Score", "Lowest Score", "Highest Score"],
+        "Score": [average_score, min_score, max_score],
+    })
+    fig = px.bar(summary_data, x="Statistic", y="Score",
+                 title="", color_discrete_sequence=["#9EE6CF"])
+    fig.update_xaxes(title_text="")
+    fig.update_yaxes(title_text="Score")
+    st.plotly_chart(fig, theme="streamlit", use_container_width=True)
+
+    # All quizes chart
+    st.header("Quiz Scores by Topic")
+    fig = px.bar(quiz_data, x="Quiz", y="Score", title="",
+                 color_discrete_sequence=["#9EE6CF"])
+    fig.update_xaxes(title_text="Quiz")
+    fig.update_yaxes(title_text="Score")
+    st.plotly_chart(fig, theme="streamlit", use_container_width=True)
+
+    # Fit a linear regression model
+    X = quiz_data["Quiz Number"].values.reshape(-1, 1)
+    y = quiz_data["Score"].values.reshape(-1, 1)
+    regression_model = LinearRegression()
+    regression_model.fit(X, y)
+
+    y_pred = regression_model.predict(X)
+
+    # Quiz scores with linear regression chart
+    st.header("Linear Regression of Quiz Scores")
+    fig = px.scatter(quiz_data, x="Quiz Number", y="Score",
+                     text="Quiz", color_discrete_sequence=["#9EE6CF"])
+    fig.add_trace(px.line(
+        x=quiz_data["Quiz Number"], y=y_pred.reshape(-1), markers=False).data[0])
+    fig.update_xaxes(title_text="Quiz Number")
+    fig.update_yaxes(title_text="Score")
+    st.plotly_chart(fig, theme="streamlit", use_container_width=True)
+
+    # Predicts next score, creates dataframe for previous score and predicted
+    next_quiz_number = len(quiz_scores) + 1
+    next_quiz_score = regression_model.predict(
+        np.array([[next_quiz_number]]))[0][0]
+
+    prev_and_projected_data = pd.DataFrame({
+        "Type": ["Previous Quiz Score", "Projected Score for Next Quiz"],
+        "Score": [quiz_scores[-1], next_quiz_score],
+    })
+
+    # Chart for previous and predicted
+    st.header("Previous Quiz Score vs Projected Score for Next Quiz")
+    fig = px.bar(prev_and_projected_data, x="Type", y="Score",
+                 title="", color_discrete_sequence=["#9EE6CF"])
+    fig.update_xaxes(title_text="")
+    fig.update_yaxes(title_text="Score")
+    st.plotly_chart(fig, theme="streamlit", use_container_width=True)
