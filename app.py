@@ -130,6 +130,7 @@ with tab1:
                                              max_length=250, min_length=30, do_sample=False)
                     st.session_state.summary = summary_raw[0]["summary_text"]
                     st.session_state.new_source_summary = False
+                st.header("Summary:")
                 st.write(st.session_state.summary)
 
         # quiz option
