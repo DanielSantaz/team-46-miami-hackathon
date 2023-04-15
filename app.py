@@ -11,6 +11,7 @@ question_model = "allenai/t5-small-squad2-question-generation"
 tokenizer = T5Tokenizer.from_pretrained(question_model)
 model = T5ForConditionalGeneration.from_pretrained(question_model)
 
+@st.cache_resource
 def generate_question(text, **generator_args):
     input_ids = tokenizer.encode(text, return_tensors="pt")
     res = model.generate(input_ids, **generator_args)
