@@ -2,8 +2,7 @@ import streamlit as st
 import easyocr
 from PIL import Image
 import io
-from transformers import pipeline, T5Config, T5ForConditionalGeneration, T5Tokenizer
-from question_generation import pipeline as qgp
+from transformers import pipeline, T5ForConditionalGeneration, T5Tokenizer
 
 st.set_page_config(page_title="Team 46", page_icon="📖")
 
