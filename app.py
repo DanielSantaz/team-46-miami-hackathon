@@ -13,10 +13,10 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 import plotly.graph_objs as go
 
-st.set_page_config(page_title="Team 46", page_icon="📖")
+st.set_page_config(page_title="DeepLearn", page_icon="📖")
+st.session_state
+
 # load in css
-
-
 def local_css(file_name):
     with open(file_name) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -65,8 +65,17 @@ if "guess" not in st.session_state:
 if "questions_answers" not in st.session_state:
     st.session_state.questions_answers = None
 if "mock" not in st.session_state:
-    st.session_state.mock = False
+    st.session_state.mock = True
 
+# =================================================== MOCK DATA START
+mock_summary = '"Robot" comes from the Czech word robota, meaning"drudgery;" and first appeared in the 1921 play RUR. More than a million industrial robots are now in use, nearly half of them in Japan. Leonardo da Vinci drew up plans for an armored humanoid machine in 1495.'
+mock_questions_answers = []
+mock_questions_answers.append(("What is the name of the robots that scout for roadside bombs?", "Talon bots"))
+mock_questions_answers.append(("What is the name of the robots that have logged 10.5 miles across the Red Planet", "Spirit and Opportunity"))
+mock_questions_answers.append(("What is the Czech word for robota?", "More than a million"))
+mock_questions_answers.append(("How many industrial robots are now in use?", "More than a million"))
+mock_questions_answers.append(("What is the Czech word for robota?", "drudgery"))
+# =================================================== MOCK DATA END
 
 def summary_button_callback():
     st.session_state.summary_button_clicked = True
@@ -108,7 +117,8 @@ def easy_reading_text(text):
     return ' '.join(bold_words)
 
 
-tab1, tab2, tab3 = st.tabs([":open_book: Main", ":student: Student", ":male-technologist: Professor"])
+tab1, tab2, tab3 = st.tabs(
+    [":open_book: Main", ":student: Student", ":male-technologist: Professor"])
 
 with tab1:
     if choice == "Image":
@@ -147,44 +157,57 @@ with tab1:
         if st.session_state.summary_button_clicked:
             update_sidebar()
             display_buttons()
-            with st.spinner("Summarizing text..."):
-                if st.session_state.new_source_summary:
-                    summarizer = pipeline(
-                        "summarization", model='facebook/bart-large-cnn')
-                    summary_raw = summarizer(st.session_state.extracted_text,
-                                             max_length=200, min_length=30, do_sample=False)
-                    st.session_state.summary = summary_raw[0]["summary_text"]
-                    st.session_state.new_source_summary = False
-                st.header("Summary :pencil2:")
-                st.write(easy_reading_text(st.session_state.summary))
+            if st.session_state.mock:
+                with st.spinner("Summarizing text..."):
+                    time.sleep(2)
+                    st.session_state.summary = mock_summary
+                    st.header("Summary :pencil2:")
+                    st.write(easy_reading_text(st.session_state.summary))
+            else: 
+                with st.spinner("Summarizing text..."):
+                    if st.session_state.new_source_summary:
+                        summarizer = pipeline(
+                            "summarization", model='facebook/bart-large-cnn')
+                        summary_raw = summarizer(st.session_state.extracted_text,
+                                                max_length=200, min_length=30, do_sample=False)
+                        st.session_state.summary = summary_raw[0]["summary_text"]
+                        st.session_state.new_source_summary = False
+                    st.header("Summary :pencil2:")
+                    st.write(easy_reading_text(st.session_state.summary))
 
         # quiz option
         if st.session_state.quiz_button_clicked:
             update_sidebar()
             display_buttons()
             if st.session_state.new_source_quiz and st.session_state.questions_answers == None:
-                with st.spinner("Generating questions..."):
-                    if st.session_state.new_source_quiz:
-                        paragraph = ""
-                        paragraphs = []
-                        for sentence in st.session_state.sentence_list:
-                            paragraph += " " + sentence
-                            if len(paragraph) > 200:
-                                paragraphs.append(paragraph)
-                                paragraph = ""
-                        num_questions = min(len(paragraphs), 5)
-                        questions_answers = []
-                        question_answerer = pipeline(
-                            "question-answering", model=answer_model)
-                        for paragraph in paragraphs[:num_questions]:
-                            question_list = generate_question(paragraph)
-                            question = question_list[0]
-                            answer = question_answerer(
-                                question=question, context=paragraph)
-                            questions_answers.append(
-                                (question, answer['answer']))
-                        st.session_state.questions_answers = questions_answers
+                if st.session_state.mock:
+                    with st.spinner("Generating questions..."):
+                        time.sleep(2)
+                        st.session_state.questions_answers = mock_questions_answers
                         st.session_state.new_source_quiz = False
+                else: 
+                    with st.spinner("Generating questions..."):
+                        if st.session_state.new_source_quiz:
+                            paragraph = ""
+                            paragraphs = []
+                            for sentence in st.session_state.sentence_list:
+                                paragraph += " " + sentence
+                                if len(paragraph) > 200:
+                                    paragraphs.append(paragraph)
+                                    paragraph = ""
+                            num_questions = min(len(paragraphs), 5)
+                            questions_answers = []
+                            question_answerer = pipeline(
+                                "question-answering", model=answer_model)
+                            for paragraph in paragraphs[:num_questions]:
+                                question_list = generate_question(paragraph)
+                                question = question_list[0]
+                                answer = question_answerer(
+                                    question=question, context=paragraph)
+                                questions_answers.append(
+                                    (question, answer['answer']))
+                            st.session_state.questions_answers = questions_answers
+                            st.session_state.new_source_quiz = False
 
                 # while st.session_state.current_question == st.session_state.current_question_temp:
                 #     st.session_state.current_question = (random.randint(0, 4))
@@ -262,13 +285,14 @@ with tab2:
 
     # All quizzes chart
     st.header("Quiz Scores by Topic")
+    st.markdown(
+        "A visualization of your strengths and weaknesses")
 
     fig = px.line_polar(quiz_data, r='Score', theta='Quiz', line_close=True, range_r=[
                         (min(quiz_scores)-5), max(quiz_scores)])
-
     # Change the range_r numbers color to black
     fig.update_polars(angularaxis=dict(showline=True, linecolor="black",
-                      linewidth=2, gridcolor="white", gridwidth=1, tickfont=dict(color="white")))
+                      linewidth=2, gridcolor="white", gridwidth=1, tickfont=dict(color="black")))
 
     st.plotly_chart(fig, theme="streamlit", use_container_width=True)
 
@@ -278,6 +302,7 @@ with tab2:
     max_score = quiz_data["Score"].max()
 
     st.header("Summary Statistics")
+    st.markdown("A quick summary of your quiz scores")
     summary_data = pd.DataFrame({
         "Statistic": ["Average Score", "Lowest Score", "Highest Score"],
         "Score": [average_score, min_score, max_score],
@@ -288,6 +313,7 @@ with tab2:
     fig.update_yaxes(title_text="Score")
     st.plotly_chart(fig, theme="streamlit", use_container_width=True)
 
+    
     # Fit a linear regression model
     X = quiz_data["Quiz Number"].values.reshape(-1, 1)
     y = quiz_data["Score"].values.reshape(-1, 1)
@@ -298,6 +324,8 @@ with tab2:
 
     # Quiz scores with linear regression chart
     st.header("Linear Regression of Quiz Scores")
+    st.markdown("An indication of how your scores a trending")
+
     fig = px.scatter(quiz_data, x="Quiz Number", y="Score",
                      text="Quiz", color_discrete_sequence=["#9EE6CF"])
     fig.add_trace(px.line(
@@ -305,6 +333,8 @@ with tab2:
     fig.update_xaxes(title_text="Quiz Number")
     fig.update_yaxes(title_text="Score")
     st.plotly_chart(fig, theme=None, use_container_width=True)
+
+    
 
     # Predicts next score, creates dataframe for previous score and predicted
     next_quiz_number = len(quiz_scores) + 1
@@ -318,6 +348,7 @@ with tab2:
 
     # Chart for previous and predicted
     st.header("Previous Quiz Score vs Projected Score for Next Quiz")
+    st.markdown("Expected score on your next quiz based on recent performance")
     fig = px.bar(prev_and_projected_data, x="Type", y="Score",
                  title="", color_discrete_sequence=["#9EE6CF"])
     fig.update_xaxes(title_text="")
@@ -360,6 +391,7 @@ with tab3:
 
     # Linear Regression of Quiz Scores for All Students
     st.header("Linear Regression of Quiz Scores for All Students")
+    st.markdown("Latest score trends for your students")
     fig = go.Figure()
 
     combined_data = pd.concat(all_students_data, ignore_index=True)
@@ -386,12 +418,15 @@ with tab3:
     fig = go.Figure()
 
     st.header("Class Quiz Scores")
+    st.markdown("Tracks recent student performance")
+
+
     header_labels = ['Student', 'Test Name', 'Performance']
     for i, label in enumerate(header_labels):
         fig.add_shape(type='rect', xref='x', yref='y', x0=i - 0.5, x1=i + 0.5, y0=len(latest_quiz_scores),
-                      y1=len(latest_quiz_scores) + 1, fillcolor='paleturquoise', line=dict(color='white'))
+                      y1=len(latest_quiz_scores) + 1, fillcolor='rgba(0, 0, 0, 0.57)', line=dict(color='white'))
         fig.add_annotation(x=i, y=len(latest_quiz_scores) + 0.25,
-                           text=label, font=dict(size=12, color='black'), showarrow=False)
+                           text=label, font=dict(size=12, color='white'), showarrow=False)
 
     for row, score in enumerate(latest_quiz_scores):
         green_percentage = score / 100
@@ -411,9 +446,9 @@ with tab3:
 
         # Add performance
         fig.add_shape(type='rect', xref='x', yref='y', x0=1.5, x1=1.5 + green_percentage,
-                      y0=row, y1=row + 1, fillcolor='rgba(0, 255, 0, 1)', line=dict(color='white'))
+                      y0=row, y1=row + 1, fillcolor='rgba(118, 255, 162, 0.77)', line=dict(color='white'))
         fig.add_shape(type='rect', xref='x', yref='y', x0=1.5 + green_percentage, x1=2.5,
-                      y0=row, y1=row + 1, fillcolor='rgba(255, 0, 0, 1)', line=dict(color='white'))
+                      y0=row, y1=row + 1, fillcolor='rgba(255, 91, 52, 0.57)', line=dict(color='white'))
         fig.add_annotation(
             x=2, y=row + 0.5, text=f"{score}%", font=dict(size=11, color='black'), showarrow=False)
 
